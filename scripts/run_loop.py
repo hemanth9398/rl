@@ -27,6 +27,7 @@ from memory.episode_store import EpisodeStore
 from memory.retrieval import Retriever
 from memory.consolidation import Consolidator
 from solver.solver import Solver
+from solver.llm_backend import backend_name as _solver_backend_name
 from verifier.verifier import Verifier
 from policy.policy_nn import PolicyNetwork, NUM_ACTIONS
 from rl.ppo import PPOTrainer
@@ -38,6 +39,7 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger("run_loop")
+logger.info("Solver backend: %s", _solver_backend_name())
 
 
 # ---------------------------------------------------------------------------

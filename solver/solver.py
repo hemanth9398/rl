@@ -1,4 +1,4 @@
-"""SymPy-based template solver."""
+"""Solver: LLM primary engine with SymPy fallback."""
 import re
 import time
 from dataclasses import dataclass, field
@@ -16,6 +16,17 @@ from sympy.parsing.sympy_parser import (
 C1 = _symbols("C1")
 
 _TRANSFORMS = standard_transformations + (implicit_multiplication_application,)
+
+# ---------------------------------------------------------------------------
+# LLM backend import (lazy — only fails at call time if unavailable)
+# ---------------------------------------------------------------------------
+
+try:
+    from solver.llm_backend import generate_solution as _llm_generate, SOLVER_BACKEND
+except ImportError:  # pragma: no cover - should always succeed in-repo
+    def _llm_generate(*_args, **_kwargs):  # type: ignore[misc]
+        return False, "llm_backend not found", ""
+    SOLVER_BACKEND = "sympy"
 
 
 def _sympify_expr(s: str, locals_dict: Optional[Dict] = None) -> sp.Expr:
@@ -39,9 +50,19 @@ class SolveResult:
 # ---------------------------------------------------------------------------
 
 def _skill_solve_linear(state: Dict[str, Any]) -> SolveResult:
-    """Parse and solve a linear equation ax + b = c using sympy.solve."""
+    """Solve a linear equation — LLM primary, SymPy fallback."""
     problem = state.get("problem_text", "")
     t0 = time.time()
+    skill_id = "skill_solve_linear"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "solved_symbol": "x"}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    # SymPy fallback
     try:
         eq_str = _extract_equation(problem)
         lhs_str, rhs_str = eq_str.split("=", 1)
@@ -55,16 +76,26 @@ def _skill_solve_linear(state: Dict[str, Any]) -> SolveResult:
         new_state = {**state, "candidate_answer": answer, "solved_symbol": "x"}
         reasoning = f"Solved linear equation: {eq} → x = {answer}"
         return SolveResult(True, new_state, reasoning, answer=answer,
-                           skill_id="skill_solve_linear", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
     except Exception as exc:
         return SolveResult(False, state, f"solve_linear failed: {exc}",
-                           skill_id="skill_solve_linear", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
 
 
 def _skill_solve_quadratic(state: Dict[str, Any]) -> SolveResult:
-    """Solve quadratic equation using sympy.solve."""
+    """Solve quadratic equation — LLM primary, SymPy fallback."""
     problem = state.get("problem_text", "")
     t0 = time.time()
+    skill_id = "skill_solve_quadratic"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "solved_symbol": "x"}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    # SymPy fallback
     try:
         eq_str = _extract_equation(problem)
         lhs_str, rhs_str = eq_str.split("=", 1)
@@ -79,16 +110,26 @@ def _skill_solve_quadratic(state: Dict[str, Any]) -> SolveResult:
                      "solution_list": [str(s) for s in sol]}
         reasoning = f"Solved quadratic: {eq} → x ∈ {sol}"
         return SolveResult(True, new_state, reasoning, answer=answer,
-                           skill_id="skill_solve_quadratic", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
     except Exception as exc:
         return SolveResult(False, state, f"solve_quadratic failed: {exc}",
-                           skill_id="skill_solve_quadratic", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
 
 
 def _skill_factor_polynomial(state: Dict[str, Any]) -> SolveResult:
-    """Factor a polynomial using sympy.factor."""
+    """Factor a polynomial — LLM primary, SymPy fallback."""
     problem = state.get("problem_text", "")
     t0 = time.time()
+    skill_id = "skill_factor_polynomial"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    # SymPy fallback
     try:
         expr_str = _extract_expression(problem)
         expr = _sympify_expr(expr_str)
@@ -97,26 +138,60 @@ def _skill_factor_polynomial(state: Dict[str, Any]) -> SolveResult:
         new_state = {**state, "candidate_answer": answer}
         reasoning = f"Factored {expr} → {factored}"
         return SolveResult(True, new_state, reasoning, answer=answer,
-                           skill_id="skill_factor_polynomial", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
     except Exception as exc:
         return SolveResult(False, state, f"factor_polynomial failed: {exc}",
-                           skill_id="skill_factor_polynomial", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
 
 
 def _skill_separate_variables(state: Dict[str, Any]) -> SolveResult:
-    """Solve a separable ODE using sympy.dsolve."""
-    return _skill_ode_sympy(state, skill_id="skill_separate_variables")
+    """Solve a separable ODE — LLM primary, SymPy fallback."""
+    problem = state.get("problem_text", "")
+    t0 = time.time()
+    skill_id = "skill_separate_variables"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "general_solution": answer,
+                         "solved_symbol": "y"}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    return _skill_ode_sympy(state, skill_id=skill_id)
 
 
 def _skill_integrating_factor(state: Dict[str, Any]) -> SolveResult:
-    """Solve a linear first-order ODE using sympy.dsolve (integrating factor)."""
-    return _skill_ode_sympy(state, skill_id="skill_integrating_factor")
+    """Solve a linear first-order ODE — LLM primary, SymPy fallback."""
+    problem = state.get("problem_text", "")
+    t0 = time.time()
+    skill_id = "skill_integrating_factor"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "general_solution": answer,
+                         "solved_symbol": "y"}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    return _skill_ode_sympy(state, skill_id=skill_id)
 
 
 def _skill_ode_sympy(state: Dict[str, Any], skill_id: str = "skill_ode_sympy") -> SolveResult:
-    """Generic ODE solver via sympy.dsolve."""
+    """Generic ODE solver — LLM primary, SymPy fallback via dsolve."""
     problem = state.get("problem_text", "")
     t0 = time.time()
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "general_solution": answer,
+                         "solved_symbol": "y"}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    # SymPy fallback
     try:
         ode_eq = _parse_ode(problem)
         if ode_eq is None:
@@ -135,16 +210,25 @@ def _skill_ode_sympy(state: Dict[str, Any], skill_id: str = "skill_ode_sympy") -
 
 
 def _skill_apply_initial_condition(state: Dict[str, Any]) -> SolveResult:
-    """Apply initial condition to general solution."""
+    """Apply initial condition to general solution — LLM primary, SymPy fallback."""
     problem = state.get("problem_text", "")
     gen_sol = state.get("general_solution") or state.get("candidate_answer", "")
     t0 = time.time()
+    skill_id = "skill_apply_initial_condition"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "particular_solution": answer}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    # SymPy fallback
     try:
         ic = _extract_initial_condition(problem)
         if ic is None:
             return SolveResult(False, state, "No initial condition found.",
-                               skill_id="skill_apply_initial_condition",
-                               duration=time.time() - t0)
+                               skill_id=skill_id, duration=time.time() - t0)
         x0_val, y0_val = ic
         xsym = symbols("x")
         c1 = symbols("C1")
@@ -155,25 +239,32 @@ def _skill_apply_initial_condition(state: Dict[str, Any]) -> SolveResult:
         c_sol = solve(Eq(lhs, y0_val), c1)
         if not c_sol:
             return SolveResult(False, state, "Could not solve for constant.",
-                               skill_id="skill_apply_initial_condition",
-                               duration=time.time() - t0)
+                               skill_id=skill_id, duration=time.time() - t0)
         particular = gen_expr.subs(c1, c_sol[0])
         answer = str(particular)
         new_state = {**state, "candidate_answer": answer, "particular_solution": answer}
         reasoning = (f"Applied IC y({x0_val})={y0_val}: C1={c_sol[0]} → y = {answer}")
         return SolveResult(True, new_state, reasoning, answer=answer,
-                           skill_id="skill_apply_initial_condition",
-                           duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
     except Exception as exc:
         return SolveResult(False, state, f"apply_ic failed: {exc}",
-                           skill_id="skill_apply_initial_condition",
-                           duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
 
 
 def _skill_algebra_sympy(state: Dict[str, Any]) -> SolveResult:
-    """Generic algebraic solver using sympy.solve."""
+    """Generic algebraic solver — LLM primary, SymPy fallback."""
     problem = state.get("problem_text", "")
     t0 = time.time()
+    skill_id = "skill_algebra_sympy"
+
+    if SOLVER_BACKEND == "llm":
+        ok, raw, answer = _llm_generate(problem, skill_id)
+        if ok and answer:
+            new_state = {**state, "candidate_answer": answer, "solved_symbol": "x"}
+            return SolveResult(True, new_state, f"LLM: {raw}", answer=answer,
+                               skill_id=skill_id, duration=time.time() - t0)
+
+    # SymPy fallback
     try:
         eq_str = _extract_equation(problem)
         lhs_str, rhs_str = eq_str.split("=", 1)
@@ -183,15 +274,15 @@ def _skill_algebra_sympy(state: Dict[str, Any]) -> SolveResult:
         sol = solve(eq, x)
         if sol is None or len(sol) == 0:
             return SolveResult(False, state, "No solution found.",
-                               skill_id="skill_algebra_sympy", duration=time.time() - t0)
+                               skill_id=skill_id, duration=time.time() - t0)
         answer = str(sol[0]) if len(sol) == 1 else str(sol)
         new_state = {**state, "candidate_answer": answer, "solved_symbol": "x"}
         reasoning = f"Solved algebra: {eq} → x = {answer}"
         return SolveResult(True, new_state, reasoning, answer=answer,
-                           skill_id="skill_algebra_sympy", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
     except Exception as exc:
         return SolveResult(False, state, f"algebra_sympy failed: {exc}",
-                           skill_id="skill_algebra_sympy", duration=time.time() - t0)
+                           skill_id=skill_id, duration=time.time() - t0)
 
 
 # ---------------------------------------------------------------------------
