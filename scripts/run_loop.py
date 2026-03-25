@@ -187,7 +187,6 @@ def main(
     start_time = time.time()
     deadline = start_time + duration_minutes * 60
     last_log_time = start_time
-    last_curriculum_time = start_time
 
     logger.info("Starting run loop for %d minutes", duration_minutes)
 
@@ -244,7 +243,7 @@ def main(
                 last_log_time = now
 
             # ── Curriculum generation (every 5 episodes) ─────────────────
-            if now - last_curriculum_time >= 30 or episode_num % 5 == 0:
+            if episode_num % 5 == 0:
                 weak_skills = curriculum.get_weak_skills(graph, min_uses=2)
                 if weak_skills:
                     new_prob = curriculum.generate_for_weak_skill(
@@ -259,7 +258,6 @@ def main(
                 # Keep generated pool bounded
                 if len(generated_problems) > 200:
                     generated_problems = generated_problems[-200:]
-                last_curriculum_time = now
 
     except KeyboardInterrupt:
         logger.info("Interrupted by user after %d episodes", episode_num)

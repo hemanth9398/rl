@@ -148,6 +148,10 @@ class MemoryGraph:
             return dict(self.graph.nodes[node_id])
         return None
 
+    def has_node(self, node_id: str) -> bool:
+        """Return True if a node with the given ID exists in the graph."""
+        return node_id in self.graph.nodes
+
     def get_all_skills(self) -> List[Dict[str, Any]]:
         return [
             dict(data)

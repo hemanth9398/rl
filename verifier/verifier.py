@@ -364,7 +364,6 @@ def _parse_ode_for_verify(text: str) -> Optional[sp.Eq]:
 
 def _numeric_ode_check(cand_expr, dy_dx, rhs_sub, xsym, num_points: int = 5) -> bool:
     """Numerically check the ODE at a few test points."""
-    import random
     c1 = symbols("C1")
     # Fix C1 = 1 for the check
     cand_num = cand_expr.subs(c1, 1)

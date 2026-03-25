@@ -73,7 +73,7 @@ class Consolidator:
             if freq < self.min_chunk_freq:
                 continue
             combined_id = f"skill_combined_{s1}_{s2}"
-            if combined_id in self.graph.graph.nodes:
+            if self.graph.has_node(combined_id):
                 continue
             n1 = self.graph.get_node(s1)
             n2 = self.graph.get_node(s2)

@@ -168,24 +168,33 @@ class PPOTrainer:
         rewards: torch.Tensor,
         values: torch.Tensor,
         dones: torch.Tensor,
+        last_value: float = 0.0,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Compute Generalised Advantage Estimates."""
+        """Compute Generalised Advantage Estimates.
+
+        Args:
+            rewards: Per-step rewards tensor.
+            values:  Critic value estimates for each step.
+            dones:   Done flags (1.0 = episode ended).
+            last_value: Bootstrap value for the step after the last one.
+                        Pass 0.0 for a terminal step, or the critic's estimate
+                        at the next state for a truncated episode.
+        """
         n = len(rewards)
         advantages = torch.zeros(n)
         returns = torch.zeros(n)
-        last_advantage = 0.0
-        last_value = 0.0
+        last_adv = 0.0
 
         for t in reversed(range(n)):
-            next_value = last_value if t == n - 1 else float(values[t + 1])
-            next_advantage = last_advantage
-            mask = 1.0 - float(dones[t])
-            delta = float(rewards[t]) + self.gamma * next_value * mask - float(values[t])
-            advantage = delta + self.gamma * self.gae_lambda * mask * next_advantage
-            advantages[t] = advantage
-            returns[t] = advantage + float(values[t])
-            last_advantage = advantage
-            last_value = float(values[t])
+            # For the final step, bootstrap from last_value if not done
+            if t == n - 1:
+                next_val = last_value * (1.0 - float(dones[t]))
+            else:
+                next_val = float(values[t + 1]) * (1.0 - float(dones[t]))
+            delta = float(rewards[t]) + self.gamma * next_val - float(values[t])
+            last_adv = delta + self.gamma * self.gae_lambda * (1.0 - float(dones[t])) * last_adv
+            advantages[t] = last_adv
+            returns[t] = last_adv + float(values[t])
 
         return advantages, returns
 
