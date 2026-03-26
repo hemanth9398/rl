@@ -311,13 +311,52 @@ if __name__ == "__main__":
     parser.add_argument(
         "--solver",
         choices=["sympy", "llm"],
-        default="sympy",
-        help="Solver backend: 'sympy' (default) or 'llm' (HuggingFace model)",
+        default="llm",
+        help="Solver backend: 'llm' (default, HuggingFace model) or 'sympy'",
     )
     parser.add_argument(
         "--model-name",
         default=DEFAULT_MODEL_NAME,
-        help="HuggingFace model name/path for --solver llm",
+        help="HuggingFace model name/path for --solver llm (legacy alias for --solver-model)",
+    )
+    # New LLM / model flags
+    parser.add_argument(
+        "--teacher-model",
+        default="Qwen/Qwen2.5-7B-Instruct",
+        help="HuggingFace model for the Teacher agent",
+    )
+    parser.add_argument(
+        "--subagent-model",
+        default="Qwen/Qwen3-30B-A3B",
+        help="HuggingFace model for SubAgents (MoE)",
+    )
+    parser.add_argument(
+        "--verifier-model",
+        default="Qwen/Qwen2.5-3B-Instruct",
+        help="HuggingFace model for the Verifier",
+    )
+    parser.add_argument(
+        "--solver-model",
+        default=None,
+        help="HuggingFace model for the Solver (defaults to --subagent-model)",
+    )
+    parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        default=False,
+        help="Force CPU-only model loading (useful for testing without GPU)",
+    )
+    parser.add_argument(
+        "--load-in-4bit",
+        action="store_true",
+        default=False,
+        help="Load models in 4-bit quantisation (requires bitsandbytes)",
+    )
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=16,
+        help="LoRA rank for LLM fine-tuning",
     )
     args = parser.parse_args()
 

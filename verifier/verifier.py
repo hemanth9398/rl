@@ -1,4 +1,7 @@
-"""SymPy-based verifier with error diagnostics."""
+"""Verifier: LLM primary with SymPy secondary cross-check."""
+from __future__ import annotations
+
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -13,6 +16,8 @@ from sympy.parsing.sympy_parser import (
 )
 
 _TRANSFORMS = standard_transformations + (implicit_multiplication_application,)
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_sympy(s: str, local_dict: Optional[Dict] = None) -> sp.Expr:
@@ -31,21 +36,59 @@ class VerifyResult:
 
 
 class Verifier:
-    """Verify correctness of candidate answers using SymPy."""
+    """Verify correctness of candidate answers.
+
+    When a :class:`~models.model_registry.ModelRegistry` is provided the 3B
+    verifier LLM acts as the primary judge.  SymPy is then used as a secondary
+    cross-check for algebraic and ODE answers.  Without a registry the class
+    falls back to pure SymPy verification so that existing tests pass unchanged.
+    """
+
+    def __init__(self, registry: Optional[Any] = None) -> None:
+        self.registry = registry
+        self._llm_verifier: Optional[Any] = None
+        if registry is not None:
+            try:
+                from models.llm_verifier import LLMVerifierModule
+                self._llm_verifier = LLMVerifierModule(registry)
+            except Exception as exc:
+                logger.warning("Verifier: could not init LLMVerifierModule: %s", exc)
 
     def verify(
         self, problem: Dict[str, Any], candidate_answer: str
     ) -> VerifyResult:
         topic = problem.get("topic", "")
         answer_spec = problem.get("answer_spec", {})
-        spec_type = answer_spec.get("type", "value")
 
+        # --- LLM primary path ---
+        if self._llm_verifier is not None:
+            try:
+                if topic.startswith("algebra") or topic.startswith("ode"):
+                    passed, explanation = self._llm_verifier.verify_with_sympy_crosscheck(
+                        problem, candidate_answer
+                    )
+                else:
+                    passed, explanation = self._llm_verifier.verify(
+                        problem, candidate_answer
+                    )
+                diagnostics = [] if passed else ["llm_incorrect"]
+                repair_hints = [] if passed else [explanation[:200]]
+                return VerifyResult(
+                    passed=passed,
+                    diagnostics=diagnostics,
+                    error_location="llm_verify",
+                    repair_hints=repair_hints,
+                    detail=explanation,
+                )
+            except Exception as exc:
+                logger.warning("Verifier LLM path failed, falling back to SymPy: %s", exc)
+
+        # --- SymPy fallback ---
         if topic.startswith("algebra"):
             return self._verify_algebra(problem, candidate_answer, answer_spec)
         elif topic.startswith("ode"):
             return self._verify_ode(problem, candidate_answer, answer_spec)
         else:
-            # Generic: compare strings
             return self._verify_string(candidate_answer, answer_spec)
 
     # ------------------------------------------------------------------
