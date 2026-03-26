@@ -312,7 +312,14 @@ class LLMPPOTrainer:
         rewards: List[float],
         clip_epsilon: float = 0.2,
     ) -> Dict[str, float]:
-        """Run a PPO update step on the LLM using token log-probabilities.
+        """Run a policy-gradient update on the LLM using token log-probabilities.
+
+        This is a *simplified* variant of PPO for language models: it computes
+        advantage-weighted log-probability losses without ratio clipping (since
+        storing reference log-probs per token would require caching the full
+        generation).  Ratio clipping (standard PPO) can be enabled in a future
+        version once reference log-probs are stored.  The ``clip_epsilon``
+        parameter is accepted for API compatibility but is not applied here.
 
         Parameters
         ----------
@@ -323,7 +330,7 @@ class LLMPPOTrainer:
         rewards:
             Scalar rewards for each (prompt, completion) pair.
         clip_epsilon:
-            PPO clipping parameter.
+            Reserved for future PPO ratio clipping (not yet applied).
 
         Returns
         -------
@@ -371,8 +378,8 @@ class LLMPPOTrainer:
                 token_lps = log_probs.gather(1, shift_labels.unsqueeze(1)).squeeze(1)
                 mean_lp = token_lps.mean()
 
-                # PPO loss: -advantage * log_prob (we don't have reference
-                # log-probs stored so we use a simple policy-gradient update)
+                # Advantage-weighted policy gradient: -adv * mean_log_prob
+                # (simplified PPO without ratio clipping — see update_llm docstring)
                 loss = -float(adv) * mean_lp
 
                 self._lora_optimizer.zero_grad()
