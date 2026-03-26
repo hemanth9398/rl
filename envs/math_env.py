@@ -1,4 +1,5 @@
 """Gymnasium-style REPL environment for the math agent."""
+import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,6 +21,8 @@ from policy.policy_nn import (
     ACTION_RETRIEVE, ACTION_SOLVE, ACTION_VERIFY, ACTION_REPAIR, ACTION_GENERATE,
     NUM_ACTIONS,
 )
+
+logger = logging.getLogger(__name__)
 
 
 STATE_DIM = 16
@@ -164,6 +167,13 @@ class MathREPLEnv:
                 best_result = result
                 break
             best_result = result
+
+        # If no skills were available, try solver.solve() directly if it exists
+        if best_result is None and hasattr(self.solver, "solve") and self._problem:
+            try:
+                best_result = self.solver.solve(self._problem)
+            except Exception as exc:
+                logger.warning("_do_solve: direct solver.solve() failed: %s", exc)
 
         if best_result and best_result.success:
             self._state = best_result.new_state

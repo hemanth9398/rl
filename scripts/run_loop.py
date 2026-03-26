@@ -30,6 +30,7 @@ from solver.solver import Solver
 from solver.llm_solver import LLMSolver, DEFAULT_MODEL_NAME
 from solver.llm_backend import backend_name as _solver_backend_name
 from verifier.verifier import Verifier
+from models.model_registry import ModelRegistry
 from policy.policy_nn import PolicyNetwork, NUM_ACTIONS
 from rl.ppo import PPOTrainer
 from envs.math_env import MathREPLEnv, STATE_DIM
@@ -154,7 +155,7 @@ def main(
     metrics_path: str = "metrics.json",
     seed: int = 42,
     device_str: str = "cpu",
-    solver_type: str = "sympy",
+    solver_type: str = "llm",
     model_name: str = DEFAULT_MODEL_NAME,
 ) -> None:
     rng = random.Random(seed)
@@ -180,7 +181,19 @@ def main(
     else:
         solver = Solver()
         logger.info("Solver: %s", _solver_backend_name())
-    verifier = Verifier()
+
+    # Build model registry for LLM-based verification when using LLM solver
+    registry: Optional[ModelRegistry] = None
+    if solver_type == "llm":
+        try:
+            registry = ModelRegistry.from_args(solver_model=model_name)
+            logger.info("ModelRegistry created (LLM verification enabled)")
+        except Exception as exc:
+            logger.warning(
+                "Could not create ModelRegistry: %s — using SymPy-only verification", exc
+            )
+
+    verifier = Verifier(registry=registry)
     curriculum = CurriculumGenerator(rng_seed=seed)
     consolidator = Consolidator(graph, episode_store)
 

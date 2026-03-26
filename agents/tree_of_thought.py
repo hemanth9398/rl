@@ -1,9 +1,12 @@
 """Tree-of-Thought engine for SubAgent reasoning."""
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -199,7 +202,6 @@ class TreeOfThought:
         solver: Any,
     ) -> str:
         """Attempt to extract/generate an answer using the solver."""
-        # Try to use the existing Solver for the actual problem
         if solver is not None:
             problem = context.get("problem", {})
             if not problem:
@@ -209,10 +211,43 @@ class TreeOfThought:
                     "domain": context.get("domain", "math"),
                     "answer_spec": context.get("answer_spec", {}),
                 }
-            try:
-                result = solver.solve(problem)
-                if result.success and result.answer:
-                    return result.answer
-            except Exception:
-                pass
+
+            # Prefer .solve() if available (LLMSolver provides this)
+            if hasattr(solver, "solve"):
+                try:
+                    result = solver.solve(problem)
+                    if result.success and result.answer:
+                        return result.answer
+                    else:
+                        logger.debug(
+                            "_extract_answer: solver.solve() returned success=%s answer=%r",
+                            result.success,
+                            result.answer,
+                        )
+                except Exception as exc:
+                    logger.warning("_extract_answer: solver.solve() raised: %s", exc)
+
+            # Fallback: SymPy Solver exposes attempt_solve()
+            elif hasattr(solver, "attempt_solve"):
+                try:
+                    topic = problem.get("topic", "general")
+                    default_skill = (
+                        solver.default_skill_for_topic(topic)
+                        if hasattr(solver, "default_skill_for_topic")
+                        else None
+                    )
+                    skills = [default_skill] if default_skill else []
+                    if skills:
+                        result = solver.attempt_solve(problem, skills)
+                        if result.success and result.answer:
+                            return result.answer
+                        else:
+                            logger.debug(
+                                "_extract_answer: attempt_solve returned success=%s answer=%r",
+                                result.success,
+                                result.answer,
+                            )
+                except Exception as exc:
+                    logger.warning("_extract_answer: solver.attempt_solve() raised: %s", exc)
+
         return f"[reasoning: {reasoning[-80:]}]"
