@@ -157,6 +157,13 @@ def main(
     device_str: str = "cpu",
     solver_type: str = "llm",
     model_name: str = DEFAULT_MODEL_NAME,
+    teacher_model: str = "Qwen/Qwen2.5-7B-Instruct",
+    subagent_model: str = "Qwen/Qwen3-30B-A3B",
+    verifier_model: str = "Qwen/Qwen2.5-3B-Instruct",
+    solver_model: Optional[str] = None,
+    cpu_only: bool = False,
+    load_in_4bit: bool = False,
+    lora_rank: int = 16,
 ) -> None:
     rng = random.Random(seed)
     torch.manual_seed(seed)
@@ -176,8 +183,9 @@ def main(
     episode_store = EpisodeStore(db_path)
     retriever = Retriever(graph, episode_store)
     if solver_type == "llm":
-        solver = LLMSolver(model_name=model_name)
-        logger.info("Solver: LLMSolver (model=%s)", model_name)
+        _solver_model = solver_model or model_name
+        solver = LLMSolver(model_name=_solver_model)
+        logger.info("Solver: LLMSolver (model=%s)", _solver_model)
     else:
         solver = Solver()
         logger.info("Solver: %s", _solver_backend_name())
@@ -186,7 +194,15 @@ def main(
     registry: Optional[ModelRegistry] = None
     if solver_type == "llm":
         try:
-            registry = ModelRegistry.from_args(solver_model=model_name)
+            registry = ModelRegistry.from_args(
+                teacher_model=teacher_model,
+                subagent_model=subagent_model,
+                verifier_model=verifier_model,
+                solver_model=solver_model or model_name,
+                cpu_only=cpu_only,
+                load_in_4bit=load_in_4bit,
+                lora_rank=lora_rank,
+            )
             logger.info("ModelRegistry created (LLM verification enabled)")
         except Exception as exc:
             logger.warning(
@@ -384,4 +400,11 @@ if __name__ == "__main__":
         device_str=args.device,
         solver_type=args.solver,
         model_name=args.model_name,
+        teacher_model=args.teacher_model,
+        subagent_model=args.subagent_model,
+        verifier_model=args.verifier_model,
+        solver_model=args.solver_model,
+        cpu_only=args.cpu_only,
+        load_in_4bit=args.load_in_4bit,
+        lora_rank=args.lora_rank,
     )

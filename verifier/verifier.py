@@ -130,8 +130,8 @@ class Verifier:
             exp_val = sp.sympify(str(expected))
             if simplify(cand_val - exp_val) == 0:
                 return VerifyResult(passed=True, detail="Exact match with expected value")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_verify_single_value: sympify comparison failed: %s", exc)
 
         # Substitute back into original equation
         statement = problem.get("statement", "")
@@ -300,8 +300,8 @@ class Verifier:
                     diff = simplify(sp.expand(cand_expr) - sp.expand(exp_expr))
                     if diff == 0:
                         return VerifyResult(passed=True, detail="ODE solution matches expected")
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug("_verify_ode: symbolic comparison with expected failed: %s", exc)
             return VerifyResult(
                 passed=False,
                 diagnostics=["verification_inconclusive"],
@@ -330,8 +330,8 @@ class Verifier:
             exp = sp.sympify(expected.replace("^", "**"))
             if simplify(cand - exp) == 0:
                 return VerifyResult(passed=True, detail="Symbolic match")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_verify_string: symbolic comparison failed: %s", exc)
         return VerifyResult(
             passed=False,
             diagnostics=["string_mismatch"],
@@ -369,8 +369,8 @@ def _extract_ic(text: str):
             x0 = sp.sympify(match.group(1).strip())
             y0 = sp.sympify(match.group(2).strip())
             return x0, y0
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("_extract_ic: failed to parse IC values: %s", exc)
     return None
 
 
@@ -388,7 +388,8 @@ def _parse_ode_for_verify(text: str) -> Optional[sp.Eq]:
         try:
             return parse_expr(s.replace("^", "**"), local_dict=loc,
                               transformations=_TRANSFORMS)
-        except Exception:
+        except Exception as exc:
+            logger.debug("_parse_ode_for_verify: failed to parse %r: %s", s, exc)
             return None
 
     match = re.search(r"d[yY]/d[xX]\s*=\s*(.+?)(?:,|$)", text)
@@ -419,6 +420,7 @@ def _numeric_ode_check(cand_expr, dy_dx, rhs_sub, xsym, num_points: int = 5) -> 
             rhs_val = float(rhs_num.subs(xsym, pt).evalf())
             if abs(lhs_val - rhs_val) > 1e-4:
                 return False
-        except Exception:
+        except Exception as exc:
+            logger.debug("_numeric_ode_check: evaluation at pt=%s failed: %s", pt, exc)
             return False
     return True

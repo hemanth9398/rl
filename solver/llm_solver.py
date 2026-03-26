@@ -5,8 +5,8 @@ This module provides ``LLMSolver``, a drop-in replacement for the SymPy-based
 ``default_skill_for_topic()`` interface so the rest of the system (env, PPO
 loop, graph updates) works unchanged.
 
-Falls back to the SymPy ``Solver`` when the ``transformers`` package is not
-installed or the model cannot be loaded.
+The LLM is the **only** answer generator.  SymPy is never used for solving
+here — it remains a secondary cross-check inside the Verifier only.
 """
 
 from __future__ import annotations
@@ -239,7 +239,9 @@ class LLMSolver:
 
     Uses a HuggingFace instruction-tuned model (default:
     ``Qwen/Qwen2.5-1.5B-Instruct``) to generate chain-of-thought solutions.
-    Falls back to the SymPy ``Solver`` when the model is unavailable.
+    The LLM is the only answer generator — SymPy is not used for solving.
+    Returns a failed :class:`~solver.solver.SolveResult` when the model is
+    unavailable so the caller can handle the failure explicitly.
 
     Parameters
     ----------
@@ -249,18 +251,6 @@ class LLMSolver:
 
     def __init__(self, model_name: str = DEFAULT_MODEL_NAME) -> None:
         self._backend = _ModelBackend(model_name)
-        self._sympy_fallback: Optional[Any] = None  # lazy import to avoid circular
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
-
-    def _sympy(self):
-        """Return SymPy Solver fallback (lazy import)."""
-        if self._sympy_fallback is None:
-            from solver.solver import Solver  # noqa: PLC0415
-            self._sympy_fallback = Solver()
-        return self._sympy_fallback
 
     def _llm_solve(
         self,
@@ -271,9 +261,15 @@ class LLMSolver:
         """Call the LLM with *prompt* and wrap result in a ``SolveResult``."""
         t0 = time.time()
         if not self._backend.load():
-            # Graceful degradation — fall back to SymPy
-            logger.info("LLMSolver: falling back to SymPy (model unavailable)")
-            return self._sympy().execute_skill({"id": skill_id}, state)
+            error_msg = self._backend.load_error or "LLM model unavailable"
+            logger.error("LLMSolver: model not available — cannot solve: %s", error_msg)
+            return SolveResult(
+                success=False,
+                new_state=state,
+                reasoning_text=f"LLM unavailable: {error_msg}",
+                skill_id=skill_id,
+                duration=time.time() - t0,
+            )
 
         try:
             raw = self._backend.generate(prompt)
