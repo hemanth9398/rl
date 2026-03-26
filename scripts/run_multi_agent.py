@@ -317,6 +317,63 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--metrics-path", type=str, default="metrics.json", dest="metrics_path")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", type=str, default="cpu", dest="device_str")
+    # LLM / model flags
+    parser.add_argument(
+        "--solver",
+        choices=["sympy", "llm"],
+        default="llm",
+        dest="solver_type",
+        help="Solver backend: 'llm' (default) or 'sympy'",
+    )
+    parser.add_argument(
+        "--teacher-model",
+        type=str,
+        default="Qwen/Qwen2.5-7B-Instruct",
+        dest="teacher_model",
+        help="HuggingFace model for the Teacher agent",
+    )
+    parser.add_argument(
+        "--subagent-model",
+        type=str,
+        default="Qwen/Qwen3-30B-A3B",
+        dest="subagent_model",
+        help="HuggingFace MoE model for SubAgents",
+    )
+    parser.add_argument(
+        "--verifier-model",
+        type=str,
+        default="Qwen/Qwen2.5-3B-Instruct",
+        dest="verifier_model",
+        help="HuggingFace model for the Verifier",
+    )
+    parser.add_argument(
+        "--solver-model",
+        type=str,
+        default=None,
+        dest="solver_model",
+        help="HuggingFace model for the Solver (defaults to --subagent-model)",
+    )
+    parser.add_argument(
+        "--cpu-only",
+        action="store_true",
+        default=False,
+        dest="cpu_only",
+        help="Force CPU-only model loading",
+    )
+    parser.add_argument(
+        "--load-in-4bit",
+        action="store_true",
+        default=False,
+        dest="load_in_4bit",
+        help="Load models in 4-bit quantisation (requires bitsandbytes)",
+    )
+    parser.add_argument(
+        "--lora-rank",
+        type=int,
+        default=16,
+        dest="lora_rank",
+        help="LoRA rank for LLM fine-tuning",
+    )
     return parser.parse_args()
 
 

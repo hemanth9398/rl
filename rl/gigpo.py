@@ -177,3 +177,74 @@ class GIGPOScorer:
         # Clip to [0, 1]
         vec = torch.clamp(vec, 0.0, 1.0)
         return vec
+
+
+# ---------------------------------------------------------------------------
+# LLM-enhanced GIGPOScorer
+# ---------------------------------------------------------------------------
+
+class LLMGIGPOScorer(GIGPOScorer):
+    """GIGPOScorer that uses actual LLM log-probabilities for branch scoring.
+
+    Extends :class:`GIGPOScorer` by combining the MLP feature score with the
+    log-probability of the branch answer under the solver/subagent LLM.  This
+    gives a richer signal than pure heuristic features.
+
+    Parameters
+    ----------
+    registry:
+        :class:`~models.model_registry.ModelRegistry` instance.  If ``None``
+        falls back to MLP-only scoring.
+    role:
+        Which registry role to query (``"solver"`` or ``"subagent"``).
+    llm_weight:
+        Weight given to the LLM log-prob component (0 = MLP only, 1 = LLM only).
+    """
+
+    def __init__(
+        self,
+        registry: Optional[Any] = None,
+        role: str = "solver",
+        llm_weight: float = 0.5,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.registry = registry
+        self.role = role
+        self.llm_weight = llm_weight
+
+    def score_branches(
+        self,
+        branches: List[ThoughtBranch],
+        context: Dict[str, Any],
+    ) -> List[float]:
+        """Score branches combining MLP features and LLM log-probabilities."""
+        mlp_scores = super().score_branches(branches, context)
+        if self.registry is None or not branches:
+            return mlp_scores
+
+        # Compute LLM log-probs for each branch
+        problem_text = context.get("problem_text", "")
+        if not problem_text:
+            problem = context.get("problem", {})
+            problem_text = problem.get("statement", "") if isinstance(problem, dict) else str(problem)
+
+        llm_scores: List[float] = []
+        for branch in branches:
+            if not branch.answer:
+                llm_scores.append(0.0)
+                continue
+            try:
+                lp = self.registry.log_probs(self.role, problem_text, branch.answer)
+                # log_probs are negative; normalise to [0,1] with sigmoid
+                score = float(torch.sigmoid(torch.tensor(lp)).item())
+            except Exception:
+                score = 0.5
+            llm_scores.append(score)
+
+        # Blend MLP and LLM scores
+        combined = [
+            (1 - self.llm_weight) * m + self.llm_weight * l
+            for m, l in zip(mlp_scores, llm_scores)
+        ]
+        return combined
