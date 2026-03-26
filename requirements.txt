@@ -5,6 +5,7 @@ numpy>=1.24
 rank_bm25>=0.2.2
 gymnasium>=0.29
 matplotlib>=3.7
-transformers>=4.37.0
-accelerate>=0.25.0
+# Optional dependencies for LLM solver mode (--solver llm)
+transformers>=4.40.0
+accelerate>=0.30.0
 sentencepiece>=0.1.99

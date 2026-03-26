@@ -27,6 +27,7 @@ from memory.episode_store import EpisodeStore
 from memory.retrieval import Retriever
 from memory.consolidation import Consolidator
 from solver.solver import Solver
+from solver.llm_solver import LLMSolver, DEFAULT_MODEL_NAME
 from solver.llm_backend import backend_name as _solver_backend_name
 from verifier.verifier import Verifier
 from policy.policy_nn import PolicyNetwork, NUM_ACTIONS
@@ -153,6 +154,8 @@ def main(
     metrics_path: str = "metrics.json",
     seed: int = 42,
     device_str: str = "cpu",
+    solver_type: str = "sympy",
+    model_name: str = DEFAULT_MODEL_NAME,
 ) -> None:
     rng = random.Random(seed)
     torch.manual_seed(seed)
@@ -171,7 +174,12 @@ def main(
     graph = build_seed_graph()
     episode_store = EpisodeStore(db_path)
     retriever = Retriever(graph, episode_store)
-    solver = Solver()
+    if solver_type == "llm":
+        solver = LLMSolver(model_name=model_name)
+        logger.info("Solver: LLMSolver (model=%s)", model_name)
+    else:
+        solver = Solver()
+        logger.info("Solver: %s", _solver_backend_name())
     verifier = Verifier()
     curriculum = CurriculumGenerator(rng_seed=seed)
     consolidator = Consolidator(graph, episode_store)
@@ -300,6 +308,17 @@ if __name__ == "__main__":
     parser.add_argument("--metrics-path", default="metrics.json")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--solver",
+        choices=["sympy", "llm"],
+        default="sympy",
+        help="Solver backend: 'sympy' (default) or 'llm' (HuggingFace model)",
+    )
+    parser.add_argument(
+        "--model-name",
+        default=DEFAULT_MODEL_NAME,
+        help="HuggingFace model name/path for --solver llm",
+    )
     args = parser.parse_args()
 
     main(
@@ -311,4 +330,6 @@ if __name__ == "__main__":
         metrics_path=args.metrics_path,
         seed=args.seed,
         device_str=args.device,
+        solver_type=args.solver,
+        model_name=args.model_name,
     )
