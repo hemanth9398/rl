@@ -303,8 +303,8 @@ def main(
             try:
                 variant = curriculum.generate_variant(rng.choice(seed_problems), dynamic_graph)
                 generated_problems.append(variant)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Curriculum generation failed at episode %d: %s", episode_num, exc)
 
         # e. Log metrics
         metrics_entry = {
