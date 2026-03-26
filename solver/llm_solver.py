@@ -346,6 +346,22 @@ class LLMSolver:
         prompt = _build_repair_prompt(problem_text, candidate, error_diagnostics, repair_hints)
         return self._llm_solve(prompt, state, skill_id="repair")
 
+    def solve(self, problem: Dict[str, Any]) -> SolveResult:
+        """Solve a problem dict directly using the LLM.
+
+        Parameters
+        ----------
+        problem:
+            Dict with at least a ``"statement"`` key.  Optional keys:
+            ``"topic"``, ``"answer_spec"``.
+        """
+        problem_text = problem.get("statement", str(problem))
+        topic = problem.get("topic", "general")
+        skill_id = _TOPIC_DEFAULT_SKILL.get(topic, "skill_generic")
+        state = {"problem_text": problem_text, "topic": topic}
+        prompt = _build_solve_prompt(problem_text)
+        return self._llm_solve(prompt, state, skill_id)
+
     def default_skill_for_topic(self, topic: str) -> Optional[Dict[str, Any]]:
         """Return a generic skill node for *topic*, or ``None`` if unknown."""
         skill_id = _TOPIC_DEFAULT_SKILL.get(topic)

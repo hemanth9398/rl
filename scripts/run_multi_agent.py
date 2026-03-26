@@ -29,7 +29,9 @@ from memory.episode_store import EpisodeStore
 from memory.retrieval import Retriever
 from memory.consolidation import Consolidator
 from solver.solver import Solver
+from solver.llm_solver import LLMSolver
 from verifier.verifier import Verifier
+from models.model_registry import ModelRegistry
 from policy.policy_nn import PolicyNetwork, NUM_ACTIONS
 from rl.grpo import GRPOTrainer
 from rl.gigpo import GIGPOScorer
@@ -109,6 +111,14 @@ def main(
     metrics_path: str = "metrics.json",
     seed: int = 42,
     device_str: str = "cpu",
+    solver_type: str = "llm",
+    teacher_model: str = "Qwen/Qwen2.5-7B-Instruct",
+    subagent_model: str = "Qwen/Qwen3-30B-A3B",
+    verifier_model: str = "Qwen/Qwen2.5-3B-Instruct",
+    solver_model: Optional[str] = None,
+    cpu_only: bool = False,
+    load_in_4bit: bool = False,
+    lora_rank: int = 16,
 ) -> None:
     """Run the multi-agent self-evolving memory training loop.
 
@@ -161,8 +171,34 @@ def main(
     # ------------------------------------------------------------------
     episode_store = EpisodeStore(db_path=db_path)
     retriever = Retriever(graph=dynamic_graph, episode_store=episode_store)
-    solver = Solver()
-    verifier = Verifier()
+
+    # Solver: prefer LLMSolver so the LLM generates answers
+    if solver_type == "llm":
+        _solver_model = solver_model or subagent_model
+        solver = LLMSolver(model_name=_solver_model)
+        logger.info("Solver: LLMSolver (model=%s)", _solver_model)
+    else:
+        solver = Solver()
+        logger.info("Solver: SymPy Solver")
+
+    # Model registry (used by Verifier for LLM-based verification)
+    registry: Optional[ModelRegistry] = None
+    if solver_type == "llm":
+        try:
+            registry = ModelRegistry.from_args(
+                teacher_model=teacher_model,
+                subagent_model=subagent_model,
+                verifier_model=verifier_model,
+                solver_model=solver_model or subagent_model,
+                cpu_only=cpu_only,
+                load_in_4bit=load_in_4bit,
+                lora_rank=lora_rank,
+            )
+            logger.info("ModelRegistry created (LLM verification enabled)")
+        except Exception as exc:
+            logger.warning("Could not create ModelRegistry: %s — using SymPy-only verification", exc)
+
+    verifier = Verifier(registry=registry)
     kt_manager = KnowledgeTransferManager()
     consolidator = Consolidator(graph=dynamic_graph, episode_store=episode_store)
     curriculum = CurriculumGenerator(rng_seed=seed)
@@ -387,4 +423,12 @@ if __name__ == "__main__":
         metrics_path=args.metrics_path,
         seed=args.seed,
         device_str=args.device_str,
+        solver_type=args.solver_type,
+        teacher_model=args.teacher_model,
+        subagent_model=args.subagent_model,
+        verifier_model=args.verifier_model,
+        solver_model=args.solver_model,
+        cpu_only=args.cpu_only,
+        load_in_4bit=args.load_in_4bit,
+        lora_rank=args.lora_rank,
     )
