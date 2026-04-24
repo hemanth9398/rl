@@ -113,7 +113,7 @@ def main(
     device_str: str = "cpu",
     solver_type: str = "llm",
     teacher_model: str = "Qwen/Qwen2.5-7B-Instruct",
-    subagent_model: str = "Qwen3-14B/8B/4B",
+    subagent_model: str = "Qwen/Qwen2.5-1.5B-Instruct",
     verifier_model: str = "Qwen/Qwen2.5-3B-Instruct",
     solver_model: Optional[str] = None,
     cpu_only: bool = False,
@@ -371,9 +371,9 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--subagent-model",
         type=str,
-        default="Qwen/Qwen-7B",
+        default="Qwen/Qwen2.5-1.5B-Instruct",
         dest="subagent_model",
-        help="HuggingFace MoE model for SubAgents",
+        help="HuggingFace model for SubAgents",
     )
     parser.add_argument(
         "--verifier-model",

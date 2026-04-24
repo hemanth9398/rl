@@ -10,3 +10,10 @@ accelerate>=0.30.0
 sentencepiece>=0.1.99
 peft>=0.11
 bitsandbytes>=0.43.0
+tiktoken
+einops
+transformers_stream_generator
+langchain
+langchain-community
+langchain-experimental
+langgraph
