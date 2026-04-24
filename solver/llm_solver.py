@@ -175,15 +175,7 @@ class _ModelBackend:
         try:
             from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
             import torch  # type: ignore
-        except ImportError as exc:
-            self._load_error = (
-                f"Missing core dependency ({exc}). "
-                "Ensure transformers>=4.40.0 and torch are installed."
-            )
-            logger.warning("LLMSolver: %s", self._load_error)
-            return False
 
-        try:
             logger.info("LLMSolver: loading model %s …", self.model_name)
             self._tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name, trust_remote_code=True
@@ -192,7 +184,8 @@ class _ModelBackend:
                 self.model_name,
                 torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
                 device_map="auto",
-                trust_remote_code=True,
+                trust_remote_code=True,source .venv/bin/activate
+
             )
             self._model.eval()
             # Cache the device so generate() doesn't need to rediscover it
@@ -202,8 +195,15 @@ class _ModelBackend:
                 self._device = torch.device("cpu")
             logger.info("LLMSolver: model loaded on device %s.", self._device)
             return True
+        except ImportError:
+            self._load_error = (
+                "transformers not installed. "
+                "Install with: pip install transformers>=4.40.0 accelerate>=0.30.0"
+            )
+            logger.warning("LLMSolver: %s", self._load_error)
+            return False
         except Exception as exc:
-            self._load_error = f"[{type(exc).__name__}] {exc}"
+            self._load_error = str(exc)
             logger.warning("LLMSolver: failed to load model '%s': %s", self.model_name, exc)
             return False
 
